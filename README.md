@@ -110,11 +110,11 @@ yoke list --blocked            # Show blocked tasks
 
 ### Notion Sync
 ```bash
-yoke link <id> <notion-url>    # Link to Notion page
-yoke pull                      # Pull from Notion
-yoke push                      # Push to Notion
-yoke sync                      # Bidirectional sync
-yoke import <notion-url>       # Import from Notion
+yoke link <id> <notion-url>    # Link local task to Notion page
+yoke import <notion-url>       # Import task from Notion
+yoke pull [id]                 # Pull updates from Notion
+yoke pull --dry-run            # Preview what would change
+# push/sync coming soon
 ```
 
 ## Storage
@@ -132,16 +132,18 @@ Data stored in `~/.yoke/`:
 ```yaml
 # ~/.yoke/config.yaml
 notion:
-  token: "secret_xxx"          # Notion integration token
+  token: "${NOTION_TOKEN}"     # Reference env var from ~/.yoke/.env
   database_id: "xxx"           # Tasks database ID
-
-sync:
-  auto: false                  # Auto-sync on commands
-  interval: "5m"               # Sync interval if auto
+  assignee_name: "Your Name"   # Safety: only interact with your tasks
 
 defaults:
   priority: 3                  # Default priority (1-5)
   status: "pending"            # Default status
+```
+
+Environment variables can be stored in `~/.yoke/.env`:
+```bash
+NOTION_TOKEN=secret_xxx
 ```
 
 ## Status

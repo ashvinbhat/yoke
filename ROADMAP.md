@@ -220,34 +220,59 @@ CREATE TABLE events (
 
 ---
 
-## Phase Y5: Notion Sync
+## Phase Y5: Notion Sync 🔶 PARTIAL
 
 **Goal:** Bidirectional sync with Notion
 
-### Deliverables
-- [ ] `yoke link <id> <notion-url>` - Link local task to Notion
-- [ ] `yoke import <notion-url>` - Import task from Notion
-- [ ] `yoke pull` - Pull updates from Notion
-- [ ] `yoke push` - Push updates to Notion
-- [ ] `yoke sync` - Bidirectional sync
-- [ ] Conflict resolution strategy
-- [ ] `yoke config notion.token <token>` - Configure Notion
+### Safety Features
+- **Assignee filter**: Only interacts with tasks assigned to configured user
+- **Dry-run mode**: Preview changes before applying
+- **Confirmation prompts**: Protect against accidental writes
 
-### Sync Strategy
+### Deliverables
+- [x] `yoke link <id> <notion-url>` - Link local task to Notion
+- [x] `yoke import <notion-url>` - Import task from Notion
+- [x] `yoke pull [id]` - Pull updates from Notion (with --dry-run)
+- [ ] `yoke push` - Push updates to Notion (⚠️ deferred - requires Notion write permissions)
+- [ ] `yoke sync` - Bidirectional sync (pending push)
+- [ ] Conflict resolution strategy (pending sync)
+
+### Status Mapping
 ```
-Notion Task                    Yoke Task
-───────────                    ─────────
-Title          ←──────────────▶ Title
-Status         ←──────────────▶ Status (mapped)
-Properties     ←──────────────▶ Tags
-Page content   ←──────────────▶ Body
-                               Local notes (not synced)
+Notion Status    →  Yoke Status
+───────────────────────────────
+Todo             →  pending
+In Progress      →  in_progress
+In Review        →  in_progress
+On QA            →  in_progress
+Verify           →  in_progress
+Done             →  done
+Blocked          →  blocked
+```
+
+### Files Added
+```
+internal/notion/
+├── client.go    # API wrapper with auth
+├── status.go    # Status mapping
+├── mapper.go    # Task ↔ Notion conversion
+├── safety.go    # Assignee validation
+├── confirm.go   # User confirmations
+└── push.go      # Push plan visualization
+
+internal/cli/
+├── link.go          # yoke link
+├── notion_import.go # yoke import
+├── pull.go          # yoke pull
+└── push.go          # yoke push (deferred)
 ```
 
 ### Exit Criteria
-- Tasks sync between Notion and yoke
-- Changes in either place reflect in other
-- No data loss on sync
+- [x] Can link local tasks to Notion pages
+- [x] Can import tasks from Notion
+- [x] Can pull updates from Notion
+- [ ] Can push updates to Notion (deferred)
+- [ ] Bidirectional sync works (pending)
 
 ---
 

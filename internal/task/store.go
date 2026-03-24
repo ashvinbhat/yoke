@@ -612,3 +612,83 @@ func (s *Store) GetRecentEvents(limit int) ([]Event, error) {
 
 	return events, nil
 }
+
+// GetByNotionID retrieves a task by its Notion page ID.
+func (s *Store) GetByNotionID(notionID string) (*Task, error) {
+	row := s.db.QueryRow("SELECT "+taskColumns+" FROM tasks WHERE notion_id = ?", notionID)
+	return s.scanTask(row)
+}
+
+// ListLinked retrieves all tasks that have a NotionID (linked to Notion).
+func (s *Store) ListLinked() ([]*Task, error) {
+	query := "SELECT " + taskColumns + " FROM tasks WHERE notion_id IS NOT NULL AND notion_id != '' ORDER BY updated_at DESC"
+
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query linked tasks: %w", err)
+	}
+	defer rows.Close()
+
+	var tasks []*Task
+	for rows.Next() {
+		var t Task
+		var tags, blockers string
+		var notionID, notionURL, extRef, parent, outcome sql.NullString
+		var syncedAt, startedAt, doneAt sql.NullTime
+
+		err := rows.Scan(
+			&t.ID, &t.Seq, &notionID, &notionURL, &extRef,
+			&t.Title, &t.Body, &t.Status, &t.Priority, &tags, &parent, &blockers,
+			&syncedAt, &t.LocalOnly, &t.CreatedAt, &t.UpdatedAt, &startedAt, &doneAt, &outcome,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan task: %w", err)
+		}
+
+		// Handle nullable fields
+		if notionID.Valid {
+			t.NotionID = &notionID.String
+		}
+		if notionURL.Valid {
+			t.NotionURL = &notionURL.String
+		}
+		if extRef.Valid {
+			t.ExternalRef = &extRef.String
+		}
+		if parent.Valid {
+			t.Parent = &parent.String
+		}
+		if outcome.Valid {
+			t.Outcome = &outcome.String
+		}
+		if syncedAt.Valid {
+			t.SyncedAt = &syncedAt.Time
+		}
+		if startedAt.Valid {
+			t.StartedAt = &startedAt.Time
+		}
+		if doneAt.Valid {
+			t.DoneAt = &doneAt.Time
+		}
+
+		json.Unmarshal([]byte(tags), &t.Tags)
+		json.Unmarshal([]byte(blockers), &t.Blockers)
+
+		if t.Tags == nil {
+			t.Tags = []string{}
+		}
+		if t.Blockers == nil {
+			t.Blockers = []string{}
+		}
+
+		tasks = append(tasks, &t)
+	}
+
+	return tasks, nil
+}
+
+// UpdateSyncedAt updates the sync timestamp for a task.
+func (s *Store) UpdateSyncedAt(id string, syncedAt time.Time) error {
+	_, err := s.db.Exec("UPDATE tasks SET synced_at = ?, updated_at = ? WHERE id = ?", syncedAt, time.Now(), id)
+	return err
+}

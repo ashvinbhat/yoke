@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"gopkg.in/yaml.v3"
 )
@@ -23,8 +24,9 @@ type Config struct {
 
 // NotionConfig holds Notion integration settings.
 type NotionConfig struct {
-	Token      string `yaml:"token"`       // Notion integration token
-	DatabaseID string `yaml:"database_id"` // Tasks database ID
+	Token        string `yaml:"token"`         // Notion integration token
+	DatabaseID   string `yaml:"database_id"`   // Tasks database ID
+	AssigneeName string `yaml:"assignee_name"` // Required assignee name for safety
 }
 
 // SyncConfig holds sync settings.
@@ -43,8 +45,9 @@ type DefaultsConfig struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Notion: NotionConfig{
-			Token:      "",
-			DatabaseID: "",
+			Token:        "",
+			DatabaseID:   "",
+			AssigneeName: "Ashvin Bhat", // Safety: only interact with your tasks
 		},
 		Sync: SyncConfig{
 			Auto:     false,
@@ -104,7 +107,43 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
+	// Expand environment variables in config values
+	cfg.expandEnvVars()
+
 	return cfg, nil
+}
+
+// expandEnvVars expands ${VAR} and $VAR patterns in config values.
+func (c *Config) expandEnvVars() {
+	c.Notion.Token = expandEnv(c.Notion.Token)
+	c.Notion.DatabaseID = expandEnv(c.Notion.DatabaseID)
+	c.Notion.AssigneeName = expandEnv(c.Notion.AssigneeName)
+}
+
+// expandEnv expands environment variables in a string.
+// Supports ${VAR} and $VAR syntax.
+func expandEnv(s string) string {
+	// First try ${VAR} syntax
+	re := regexp.MustCompile(`\$\{([^}]+)\}`)
+	s = re.ReplaceAllStringFunc(s, func(match string) string {
+		varName := match[2 : len(match)-1] // Extract VAR from ${VAR}
+		if val := os.Getenv(varName); val != "" {
+			return val
+		}
+		return match // Keep original if env var not set
+	})
+
+	// Then try $VAR syntax (word boundary)
+	re2 := regexp.MustCompile(`\$([A-Za-z_][A-Za-z0-9_]*)`)
+	s = re2.ReplaceAllStringFunc(s, func(match string) string {
+		varName := match[1:] // Extract VAR from $VAR
+		if val := os.Getenv(varName); val != "" {
+			return val
+		}
+		return match // Keep original if env var not set
+	})
+
+	return s
 }
 
 // Save writes the configuration to disk.
