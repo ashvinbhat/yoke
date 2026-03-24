@@ -165,16 +165,16 @@ CREATE TABLE events (
 
 ---
 
-## Phase Y2: Hierarchy
+## Phase Y2: Hierarchy ✅ DONE
 
 **Goal:** Break down complex tasks
 
 ### Deliverables
-- [ ] `yoke add "title" --parent <id>` - Create subtask
-- [ ] `yoke subtask <parent> "title"` - Shorthand for above
-- [ ] `yoke tree` - Show task hierarchy
-- [ ] `yoke list --tree` - List with tree view
-- [ ] Auto-complete parent when all children done (optional)
+- [x] `yoke add "title" --parent <id>` - Create subtask
+- [x] `yoke subtask <parent> "title"` - Shorthand for above
+- [x] `yoke tree` - Show task hierarchy with icons (○ pending, ◐ active, ● in_progress, ✓ done, ✗ dropped)
+- [x] `yoke list --tree` - List with tree view
+- [ ] Auto-complete parent when all children done (optional - deferred)
 
 ### Exit Criteria
 - Can break down tasks into subtasks

@@ -16,6 +16,7 @@ var (
 	listBlocked  bool
 	listReady    bool
 	listAll      bool
+	listTree     bool
 )
 
 var listCmd = &cobra.Command{
@@ -28,7 +29,8 @@ Examples:
   yoke list --all            # All tasks including done
   yoke list --status active  # Only active tasks
   yoke list --tag backend    # Tasks with tag
-  yoke list --ready          # Unblocked, ready to work`,
+  yoke list --ready          # Unblocked, ready to work
+  yoke list --tree           # Show as tree`,
 	Aliases: []string{"ls"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		opts := task.ListOptions{
@@ -69,6 +71,12 @@ Examples:
 
 		if len(tasks) == 0 {
 			fmt.Println("No tasks found")
+			return nil
+		}
+
+		// Tree view
+		if listTree {
+			printTree(tasks)
 			return nil
 		}
 
@@ -118,4 +126,5 @@ func init() {
 	listCmd.Flags().BoolVar(&listBlocked, "blocked", false, "Only blocked tasks")
 	listCmd.Flags().BoolVar(&listReady, "ready", false, "Only ready tasks (unblocked)")
 	listCmd.Flags().BoolVarP(&listAll, "all", "a", false, "Include completed tasks")
+	listCmd.Flags().BoolVar(&listTree, "tree", false, "Show as tree")
 }
