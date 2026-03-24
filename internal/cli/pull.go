@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ashvinbhat/yoke/internal/notion"
-	"github.com/ashvinbhat/yoke/internal/task"
+	"github.com/ashvinbhat/yoke/task"
 	"github.com/jomei/notionapi"
 	"github.com/spf13/cobra"
 )

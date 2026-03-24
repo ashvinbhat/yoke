@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ashvinbhat/yoke/internal/task"
+	"github.com/ashvinbhat/yoke/task"
 	"github.com/spf13/cobra"
 )
 

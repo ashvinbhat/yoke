@@ -1,6 +1,6 @@
 package notion
 
-import "github.com/ashvinbhat/yoke/internal/task"
+import "github.com/ashvinbhat/yoke/task"
 
 // NotionStatus represents a Notion status value.
 type NotionStatus string

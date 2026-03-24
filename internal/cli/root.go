@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/ashvinbhat/yoke/internal/config"
-	"github.com/ashvinbhat/yoke/internal/task"
+	"github.com/ashvinbhat/yoke/task"
 	"github.com/spf13/cobra"
 )
 
