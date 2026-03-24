@@ -183,16 +183,16 @@ CREATE TABLE events (
 
 ---
 
-## Phase Y3: Dependencies
+## Phase Y3: Dependencies ✅ DONE
 
 **Goal:** Track blockers and find ready work
 
 ### Deliverables
-- [ ] `yoke block <id> --by <blocker>` - Add dependency
-- [ ] `yoke unblock <id> <blocker>` - Remove dependency
-- [ ] `yoke ready` - Show tasks with no blockers
-- [ ] `yoke list --blocked` - Show blocked tasks
-- [ ] Cycle detection in dependency graph
+- [x] `yoke block <id> --by <blocker>` - Add dependency
+- [x] `yoke unblock <id> <blocker>` - Remove dependency
+- [x] `yoke ready` - Show tasks with no blockers
+- [x] `yoke list --blocked` - Show blocked tasks
+- [x] Cycle detection in dependency graph
 
 ### Exit Criteria
 - Can track what blocks what
@@ -201,18 +201,18 @@ CREATE TABLE events (
 
 ---
 
-## Phase Y4: Tags & Filtering
+## Phase Y4: Tags & Filtering ✅ DONE
 
 **Goal:** Organize and find tasks
 
 ### Deliverables
-- [ ] `yoke add "title" --tag backend --tag urgent`
-- [ ] `yoke tag <id> <tag>` - Add tag
-- [ ] `yoke untag <id> <tag>` - Remove tag
-- [ ] `yoke list --tag backend`
-- [ ] `yoke list --status active`
-- [ ] `yoke list --priority 1`
-- [ ] `yoke search "keyword"` - Full-text search
+- [x] `yoke add "title" --tag backend --tag urgent`
+- [x] `yoke tag <id> <tag>` - Add tag
+- [x] `yoke untag <id> <tag>` - Remove tag
+- [x] `yoke list --tag backend`
+- [x] `yoke list --status active`
+- [x] `yoke list --priority 1`
+- [x] `yoke search "keyword"` - Full-text search
 
 ### Exit Criteria
 - Can tag and filter tasks

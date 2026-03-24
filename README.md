@@ -74,10 +74,20 @@ yoke done <id>                 # Complete task
 yoke drop <id>                 # Abandon task
 ```
 
-### Notes
+### Notes & History
 ```bash
 yoke note <id> "text"          # Add note to task
 yoke notes <id>                # Show task notes
+yoke log <id>                  # Show task history
+yoke log                       # Recent activity
+```
+
+### Editing & Tags
+```bash
+yoke edit <id>                 # Edit task properties
+yoke tag <id> <tag>            # Add tag
+yoke untag <id> <tag>          # Remove tag
+yoke tags                      # List all tags
 ```
 
 ### Hierarchy & Dependencies
@@ -87,6 +97,15 @@ yoke block <id> --by <other>   # Add blocker
 yoke unblock <id> <other>      # Remove blocker
 yoke ready                     # Show unblocked tasks
 yoke tree                      # Show task hierarchy
+yoke list --tree               # List as tree view
+```
+
+### Search & Filter
+```bash
+yoke search "keyword"          # Search tasks
+yoke list --tag <tag>          # Filter by tag
+yoke list --status <status>    # Filter by status
+yoke list --blocked            # Show blocked tasks
 ```
 
 ### Notion Sync

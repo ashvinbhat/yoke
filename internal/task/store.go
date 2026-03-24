@@ -421,12 +421,79 @@ func (s *Store) LogEvent(taskID, eventType, oldValue, newValue string) {
 	`, taskID, eventType, oldValue, newValue)
 }
 
-// Search finds tasks matching the query string.
+// Search finds tasks matching the query string in title or body.
 func (s *Store) Search(query string) ([]*Task, error) {
-	// TODO: Implement proper FTS search
-	// For now, just return all open tasks
-	_ = "%" + strings.ToLower(query) + "%" // placeholder for future search
-	return s.List(ListOptions{Open: true})
+	searchPattern := "%" + strings.ToLower(query) + "%"
+
+	rows, err := s.db.Query(`
+		SELECT `+taskColumns+` FROM tasks
+		WHERE LOWER(title) LIKE ? OR LOWER(body) LIKE ?
+		ORDER BY
+			CASE WHEN status IN ('done', 'dropped') THEN 1 ELSE 0 END,
+			priority ASC,
+			created_at DESC
+	`, searchPattern, searchPattern)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search tasks: %w", err)
+	}
+	defer rows.Close()
+
+	var tasks []*Task
+	for rows.Next() {
+		var t Task
+		var tags, blockers string
+		var notionID, notionURL, extRef, parent, outcome sql.NullString
+		var syncedAt, startedAt, doneAt sql.NullTime
+
+		err := rows.Scan(
+			&t.ID, &t.Seq, &notionID, &notionURL, &extRef,
+			&t.Title, &t.Body, &t.Status, &t.Priority, &tags, &parent, &blockers,
+			&syncedAt, &t.LocalOnly, &t.CreatedAt, &t.UpdatedAt, &startedAt, &doneAt, &outcome,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan task: %w", err)
+		}
+
+		// Handle nullable fields
+		if notionID.Valid {
+			t.NotionID = &notionID.String
+		}
+		if notionURL.Valid {
+			t.NotionURL = &notionURL.String
+		}
+		if extRef.Valid {
+			t.ExternalRef = &extRef.String
+		}
+		if parent.Valid {
+			t.Parent = &parent.String
+		}
+		if outcome.Valid {
+			t.Outcome = &outcome.String
+		}
+		if syncedAt.Valid {
+			t.SyncedAt = &syncedAt.Time
+		}
+		if startedAt.Valid {
+			t.StartedAt = &startedAt.Time
+		}
+		if doneAt.Valid {
+			t.DoneAt = &doneAt.Time
+		}
+
+		json.Unmarshal([]byte(tags), &t.Tags)
+		json.Unmarshal([]byte(blockers), &t.Blockers)
+
+		if t.Tags == nil {
+			t.Tags = []string{}
+		}
+		if t.Blockers == nil {
+			t.Blockers = []string{}
+		}
+
+		tasks = append(tasks, &t)
+	}
+
+	return tasks, nil
 }
 
 // Note represents a note attached to a task.
