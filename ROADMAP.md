@@ -77,19 +77,19 @@ const (
 
 ---
 
-## Phase Y0: Core CRUD ✅ CURRENT
+## Phase Y0: Core CRUD ✅ DONE
 
 **Goal:** Basic task management works
 
 ### Deliverables
-- [ ] `yoke init` - Initialize ~/.yoke directory and database
-- [ ] `yoke add "title"` - Create a task
-- [ ] `yoke list` - List all tasks
-- [ ] `yoke show <id>` - Show task details
-- [ ] `yoke start <id>` - Mark task as in_progress
-- [ ] `yoke done <id>` - Mark task as done
-- [ ] `yoke drop <id>` - Mark task as dropped
-- [ ] `yoke edit <id>` - Edit task (opens $EDITOR)
+- [x] `yoke init` - Initialize ~/.yoke directory and database
+- [x] `yoke add "title"` - Create a task
+- [x] `yoke list` - List all tasks
+- [x] `yoke show <id>` - Show task details
+- [x] `yoke start <id>` - Mark task as in_progress
+- [x] `yoke done <id>` - Mark task as done
+- [x] `yoke drop <id>` - Mark task as dropped
+- [x] `yoke edit <id>` - Edit task
 
 ### Structure
 ```
@@ -127,15 +127,17 @@ yoke/
 
 ---
 
-## Phase Y1: Notes & Events
+## Phase Y1: Notes & Events ✅ DONE
 
 **Goal:** Track activity and add context
 
 ### Deliverables
-- [ ] `yoke note <id> "text"` - Add note to task
-- [ ] `yoke notes <id>` - Show all notes for task
-- [ ] Event logging (all mutations recorded)
-- [ ] `yoke log <id>` - Show task history
+- [x] `yoke note <id> "text"` - Add note to task
+- [x] `yoke notes <id>` - Show all notes for task
+- [x] Event logging (all mutations recorded)
+- [x] `yoke log <id>` - Show task history
+- [x] `yoke tag/untag/tags` - Tag management
+- [x] `yoke edit` - Edit task properties with logging
 
 ### Schema Addition
 ```sql

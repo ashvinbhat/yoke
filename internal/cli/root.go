@@ -78,4 +78,6 @@ func init() {
 	rootCmd.AddCommand(doneCmd)
 	rootCmd.AddCommand(dropCmd)
 	rootCmd.AddCommand(noteCmd)
+	rootCmd.AddCommand(logCmd)
+	rootCmd.AddCommand(editCmd)
 }

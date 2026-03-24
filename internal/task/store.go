@@ -142,7 +142,7 @@ func (s *Store) Create(t *Task) error {
 	}
 
 	// Log creation event
-	s.logEvent(t.ID, "created", "", t.Title)
+	s.LogEvent(t.ID, "created", "", t.Title)
 
 	return nil
 }
@@ -397,7 +397,7 @@ func (s *Store) Delete(id string) error {
 		return fmt.Errorf("task not found")
 	}
 
-	s.logEvent(id, "deleted", "", "")
+	s.LogEvent(id, "deleted", "", "")
 	return nil
 }
 
@@ -409,12 +409,12 @@ func (s *Store) UpdateStatus(id string, oldStatus, newStatus Status) error {
 		return fmt.Errorf("failed to update status: %w", err)
 	}
 
-	s.logEvent(id, "status_changed", string(oldStatus), string(newStatus))
+	s.LogEvent(id, "status_changed", string(oldStatus), string(newStatus))
 	return nil
 }
 
-// logEvent records an event in the events table.
-func (s *Store) logEvent(taskID, eventType, oldValue, newValue string) {
+// LogEvent records an event in the events table.
+func (s *Store) LogEvent(taskID, eventType, oldValue, newValue string) {
 	s.db.Exec(`
 		INSERT INTO events (task_id, event_type, old_value, new_value)
 		VALUES (?, ?, ?, ?)
@@ -446,7 +446,7 @@ func (s *Store) AddNote(taskID, content string) error {
 		return fmt.Errorf("failed to add note: %w", err)
 	}
 
-	s.logEvent(taskID, "note_added", "", content)
+	s.LogEvent(taskID, "note_added", "", content)
 	return nil
 }
 
@@ -471,4 +471,77 @@ func (s *Store) GetNotes(taskID string) ([]Note, error) {
 	}
 
 	return notes, nil
+}
+
+// Event represents a recorded event/mutation on a task.
+type Event struct {
+	ID        int
+	TaskID    string
+	EventType string
+	OldValue  string
+	NewValue  string
+	CreatedAt time.Time
+}
+
+// GetEvents retrieves all events for a task.
+func (s *Store) GetEvents(taskID string) ([]Event, error) {
+	rows, err := s.db.Query(`
+		SELECT id, task_id, event_type, old_value, new_value, created_at
+		FROM events
+		WHERE task_id = ? ORDER BY created_at ASC
+	`, taskID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get events: %w", err)
+	}
+	defer rows.Close()
+
+	var events []Event
+	for rows.Next() {
+		var e Event
+		var oldVal, newVal sql.NullString
+		if err := rows.Scan(&e.ID, &e.TaskID, &e.EventType, &oldVal, &newVal, &e.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan event: %w", err)
+		}
+		if oldVal.Valid {
+			e.OldValue = oldVal.String
+		}
+		if newVal.Valid {
+			e.NewValue = newVal.String
+		}
+		events = append(events, e)
+	}
+
+	return events, nil
+}
+
+// GetRecentEvents retrieves recent events across all tasks.
+func (s *Store) GetRecentEvents(limit int) ([]Event, error) {
+	rows, err := s.db.Query(`
+		SELECT id, task_id, event_type, old_value, new_value, created_at
+		FROM events
+		ORDER BY created_at DESC
+		LIMIT ?
+	`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get events: %w", err)
+	}
+	defer rows.Close()
+
+	var events []Event
+	for rows.Next() {
+		var e Event
+		var oldVal, newVal sql.NullString
+		if err := rows.Scan(&e.ID, &e.TaskID, &e.EventType, &oldVal, &newVal, &e.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan event: %w", err)
+		}
+		if oldVal.Valid {
+			e.OldValue = oldVal.String
+		}
+		if newVal.Valid {
+			e.NewValue = newVal.String
+		}
+		events = append(events, e)
+	}
+
+	return events, nil
 }
