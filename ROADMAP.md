@@ -1,6 +1,6 @@
 # Yoke Roadmap
 
-> Task management system - Foundation for ox
+> Local-first task management system
 
 ## Vision
 
@@ -311,7 +311,7 @@ Page content   ←──────────────▶ Body
 - Single binary distribution
 - Fast compilation
 - Excellent CLI tooling (cobra)
-- Can be imported by ox
+- Can be imported as a library
 
 ### ID Generation
 - Short hash from content + timestamp

@@ -21,8 +21,8 @@ var rootCmd = &cobra.Command{
 	Short: "The yoke that binds your tasks to your work",
 	Long: `yoke is a local-first task management system.
 
-It keeps your tasks in sync with Notion and provides the foundation
-for ox (agent workspace manager).
+It keeps your tasks organized with SQLite storage, Notion sync,
+and a powerful CLI for managing your daily work.
 
 Get started:
   yoke init                 Initialize yoke

@@ -2,7 +2,7 @@
 
 > The yoke that binds your tasks to your work.
 
-A local-first task management system built in Go. Syncs with Notion, tracks dependencies, and serves as the foundation for [ox](../ox) (agent workspace manager).
+A local-first task management system built in Go. Syncs with Notion, tracks dependencies, and provides a CLI for managing your daily work.
 
 ## Philosophy
 
@@ -16,9 +16,9 @@ A local-first task management system built in Go. Syncs with Notion, tracks depe
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                           NOTION                                │
-│                    (Company task source)                        │
+│                      (Optional sync)                            │
 └─────────────────────────────┬───────────────────────────────────┘
-                              │ sync (bidirectional)
+                              │ bidirectional sync
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                           YOKE                                  │
@@ -27,20 +27,17 @@ A local-first task management system built in Go. Syncs with Notion, tracks depe
 │  • Dependencies           • Hierarchy                           │
 │  • Status tracking        • Event log                           │
 └─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-                    Used by: ox (agent workspace)
 ```
 
 ## Installation
 
 ```bash
-go install github.com/yourusername/yoke/cmd/yoke@latest
+go install github.com/ashvinbhat/yoke/cmd/yoke@latest
 ```
 
 Or build from source:
 ```bash
-git clone <repo>
+git clone https://github.com/ashvinbhat/yoke.git
 cd yoke
 make build
 ```
