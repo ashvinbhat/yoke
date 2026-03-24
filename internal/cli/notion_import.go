@@ -61,6 +61,13 @@ Examples:
 		tags := notion.GetPageTags(page)
 		pageURL := notion.GetPageURL(page)
 
+		// Fetch page content (body)
+		body, err := client.GetPageContent(ctx, pageID)
+		if err != nil {
+			fmt.Printf("Warning: could not fetch page content: %v\n", err)
+			body = ""
+		}
+
 		// Check if already imported
 		existing, _ := store.GetByNotionID(pageID)
 		if existing != nil {
@@ -79,6 +86,15 @@ Examples:
 				fmt.Printf("  Tags:     %v\n", tags)
 			}
 			fmt.Printf("  Notion:   %s\n", pageURL)
+			if body != "" {
+				fmt.Printf("\n  Body:\n")
+				// Show first 500 chars of body
+				preview := body
+				if len(preview) > 500 {
+					preview = preview[:500] + "..."
+				}
+				fmt.Printf("  %s\n", preview)
+			}
 			return nil
 		}
 
@@ -86,6 +102,7 @@ Examples:
 		t := task.New(title)
 		t.Status = yokeStatus
 		t.Priority = priority
+		t.Body = body
 		t.NotionID = &pageID
 		t.NotionURL = &pageURL
 		t.LocalOnly = false
@@ -106,6 +123,9 @@ Examples:
 		fmt.Printf("  Priority: P%d\n", t.Priority)
 		if len(t.Tags) > 0 {
 			fmt.Printf("  Tags:     %v\n", t.Tags)
+		}
+		if t.Body != "" {
+			fmt.Printf("  Body:     %d chars imported\n", len(t.Body))
 		}
 		fmt.Printf("  Notion:   %s\n", pageURL)
 

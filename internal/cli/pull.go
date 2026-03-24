@@ -54,10 +54,29 @@ Examples:
 				return fmt.Errorf("failed to fetch Notion page: %w", err)
 			}
 
+			// Fetch page content (body)
+			body, err := client.GetPageContent(ctx, *t.NotionID)
+			if err != nil {
+				fmt.Printf("Warning: could not fetch page content: %v\n", err)
+				body = t.Body // Keep existing body
+			}
+
 			update := notion.PageToTaskUpdate(page, t)
 
+			// Check if body changed
+			if body != t.Body {
+				update.HasChanges = true
+				oldLen := len(t.Body)
+				newLen := len(body)
+				update.Changes = append(update.Changes, notion.FieldChange{
+					Field:    "Body",
+					OldValue: fmt.Sprintf("%d chars", oldLen),
+					NewValue: fmt.Sprintf("%d chars", newLen),
+				})
+			}
+
 			if pullDryRun {
-				printPullDryRun([]*pullTask{{task: t, update: update}})
+				printPullDryRun([]*pullTask{{task: t, update: update, body: body}})
 				return nil
 			}
 
@@ -67,6 +86,7 @@ Examples:
 			}
 
 			update.ApplyToTask(t)
+			t.Body = body // Apply body separately
 			if err := store.Update(t); err != nil {
 				return fmt.Errorf("failed to update task: %w", err)
 			}
@@ -108,8 +128,25 @@ Examples:
 				continue
 			}
 
+			// Fetch page content (body)
+			body, err := client.GetPageContent(ctx, *t.NotionID)
+			if err != nil {
+				body = t.Body // Keep existing
+			}
+
 			update := notion.PageToTaskUpdate(page, t)
-			pullTasks = append(pullTasks, &pullTask{task: t, update: update, page: page})
+
+			// Check if body changed
+			if body != t.Body {
+				update.HasChanges = true
+				update.Changes = append(update.Changes, notion.FieldChange{
+					Field:    "Body",
+					OldValue: fmt.Sprintf("%d chars", len(t.Body)),
+					NewValue: fmt.Sprintf("%d chars", len(body)),
+				})
+			}
+
+			pullTasks = append(pullTasks, &pullTask{task: t, update: update, page: page, body: body})
 		}
 
 		if pullDryRun {
@@ -129,6 +166,7 @@ Examples:
 			}
 
 			pt.update.ApplyToTask(pt.task)
+			pt.task.Body = pt.body // Apply body separately
 			if err := store.Update(pt.task); err != nil {
 				fmt.Printf("Warning: failed to update task #%d: %v\n", pt.task.Seq, err)
 				continue
@@ -155,6 +193,7 @@ type pullTask struct {
 	task   *task.Task
 	update *notion.TaskUpdate
 	page   *notionapi.Page
+	body   string // Page content as markdown
 }
 
 func printPullDryRun(tasks []*pullTask) {

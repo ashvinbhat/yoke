@@ -261,3 +261,150 @@ func (c *Client) UpdatePage(ctx context.Context, pageID string, update *NotionUp
 	})
 	return err
 }
+
+// GetPageContent retrieves all blocks from a page and converts them to markdown.
+func (c *Client) GetPageContent(ctx context.Context, pageID string) (string, error) {
+	var allBlocks []notionapi.Block
+	var cursor notionapi.Cursor
+
+	for {
+		pagination := &notionapi.Pagination{PageSize: 100}
+		if cursor != "" {
+			pagination.StartCursor = cursor
+		}
+
+		resp, err := c.api.Block.GetChildren(ctx, notionapi.BlockID(pageID), pagination)
+		if err != nil {
+			return "", fmt.Errorf("get blocks: %w", err)
+		}
+
+		allBlocks = append(allBlocks, resp.Results...)
+
+		if !resp.HasMore {
+			break
+		}
+		cursor = notionapi.Cursor(resp.NextCursor)
+	}
+
+	return blocksToMarkdown(allBlocks), nil
+}
+
+// blocksToMarkdown converts Notion blocks to markdown text.
+func blocksToMarkdown(blocks []notionapi.Block) string {
+	var sb strings.Builder
+
+	for _, block := range blocks {
+		switch b := block.(type) {
+		case *notionapi.ParagraphBlock:
+			sb.WriteString(richTextToString(b.Paragraph.RichText))
+			sb.WriteString("\n\n")
+
+		case *notionapi.Heading1Block:
+			sb.WriteString("# ")
+			sb.WriteString(richTextToString(b.Heading1.RichText))
+			sb.WriteString("\n\n")
+
+		case *notionapi.Heading2Block:
+			sb.WriteString("## ")
+			sb.WriteString(richTextToString(b.Heading2.RichText))
+			sb.WriteString("\n\n")
+
+		case *notionapi.Heading3Block:
+			sb.WriteString("### ")
+			sb.WriteString(richTextToString(b.Heading3.RichText))
+			sb.WriteString("\n\n")
+
+		case *notionapi.BulletedListItemBlock:
+			sb.WriteString("- ")
+			sb.WriteString(richTextToString(b.BulletedListItem.RichText))
+			sb.WriteString("\n")
+
+		case *notionapi.NumberedListItemBlock:
+			sb.WriteString("1. ")
+			sb.WriteString(richTextToString(b.NumberedListItem.RichText))
+			sb.WriteString("\n")
+
+		case *notionapi.ToDoBlock:
+			if b.ToDo.Checked {
+				sb.WriteString("- [x] ")
+			} else {
+				sb.WriteString("- [ ] ")
+			}
+			sb.WriteString(richTextToString(b.ToDo.RichText))
+			sb.WriteString("\n")
+
+		case *notionapi.ToggleBlock:
+			sb.WriteString("> ")
+			sb.WriteString(richTextToString(b.Toggle.RichText))
+			sb.WriteString("\n\n")
+
+		case *notionapi.CodeBlock:
+			lang := ""
+			if b.Code.Language != "" {
+				lang = string(b.Code.Language)
+			}
+			sb.WriteString("```")
+			sb.WriteString(lang)
+			sb.WriteString("\n")
+			sb.WriteString(richTextToString(b.Code.RichText))
+			sb.WriteString("\n```\n\n")
+
+		case *notionapi.QuoteBlock:
+			sb.WriteString("> ")
+			sb.WriteString(richTextToString(b.Quote.RichText))
+			sb.WriteString("\n\n")
+
+		case *notionapi.CalloutBlock:
+			sb.WriteString("> ")
+			sb.WriteString(richTextToString(b.Callout.RichText))
+			sb.WriteString("\n\n")
+
+		case *notionapi.DividerBlock:
+			sb.WriteString("---\n\n")
+
+		case *notionapi.BookmarkBlock:
+			if b.Bookmark.URL != "" {
+				sb.WriteString(fmt.Sprintf("[Bookmark](%s)\n\n", b.Bookmark.URL))
+			}
+
+		case *notionapi.LinkPreviewBlock:
+			if b.LinkPreview.URL != "" {
+				sb.WriteString(fmt.Sprintf("[Link](%s)\n\n", b.LinkPreview.URL))
+			}
+		}
+	}
+
+	return strings.TrimSpace(sb.String())
+}
+
+// richTextToString converts Notion rich text to plain string with basic formatting.
+func richTextToString(richText []notionapi.RichText) string {
+	var parts []string
+	for _, rt := range richText {
+		text := rt.PlainText
+
+		// Apply formatting
+		if rt.Annotations != nil {
+			if rt.Annotations.Bold {
+				text = "**" + text + "**"
+			}
+			if rt.Annotations.Italic {
+				text = "_" + text + "_"
+			}
+			if rt.Annotations.Code {
+				text = "`" + text + "`"
+			}
+			if rt.Annotations.Strikethrough {
+				text = "~~" + text + "~~"
+			}
+		}
+
+		// Handle links
+		if rt.Href != "" {
+			text = fmt.Sprintf("[%s](%s)", text, rt.Href)
+		}
+
+		parts = append(parts, text)
+	}
+	return strings.Join(parts, "")
+}
