@@ -29,8 +29,8 @@ Get started:
   yoke add "My first task"  Create a task
   yoke list                 List all tasks`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Skip setup for init command
-		if cmd.Name() == "init" {
+		// Skip setup for commands that must work before/without a database
+		if cmd.Name() == "init" || cmd.Name() == "docs" {
 			return nil
 		}
 

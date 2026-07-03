@@ -45,6 +45,10 @@ Examples:
 			}
 		}
 
+		if readyJSONFlag {
+			return printJSON(toTaskListJSON(readyTasks))
+		}
+
 		if len(readyTasks) == 0 {
 			fmt.Println("No ready tasks")
 			return nil
@@ -93,7 +97,10 @@ func isTaskReady(t *task.Task) bool {
 	return true
 }
 
+var readyJSONFlag bool
+
 func init() {
 	readyCmd.Flags().StringP("tag", "t", "", "Filter by tag")
+	readyCmd.Flags().BoolVar(&readyJSONFlag, "json", false, "Output as JSON array")
 	rootCmd.AddCommand(readyCmd)
 }

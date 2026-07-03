@@ -7,6 +7,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var showJSON bool
+
 var showCmd = &cobra.Command{
 	Use:   "show <id>",
 	Short: "Show task details",
@@ -16,12 +18,17 @@ The id can be the task ID (e.g., a3f8) or sequence number (e.g., 42).
 
 Examples:
   yoke show a3f8
-  yoke show 42`,
+  yoke show 42
+  yoke show 42 --json   # machine-readable, with resolved relations`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		t, err := store.Get(args[0])
 		if err != nil {
 			return fmt.Errorf("task not found: %s", args[0])
+		}
+
+		if showJSON {
+			return printJSON(buildTaskDetail(t))
 		}
 
 		// Header
@@ -94,4 +101,8 @@ Examples:
 
 		return nil
 	},
+}
+
+func init() {
+	showCmd.Flags().BoolVar(&showJSON, "json", false, "Output as JSON with resolved parent/children/blockers")
 }

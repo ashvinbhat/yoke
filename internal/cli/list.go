@@ -17,6 +17,7 @@ var (
 	listReady    bool
 	listAll      bool
 	listTree     bool
+	listJSON     bool
 )
 
 var listCmd = &cobra.Command{
@@ -67,6 +68,10 @@ Examples:
 		tasks, err := store.List(opts)
 		if err != nil {
 			return fmt.Errorf("failed to list tasks: %w", err)
+		}
+
+		if listJSON {
+			return printJSON(toTaskListJSON(tasks))
 		}
 
 		if len(tasks) == 0 {
@@ -127,4 +132,5 @@ func init() {
 	listCmd.Flags().BoolVar(&listReady, "ready", false, "Only ready tasks (unblocked)")
 	listCmd.Flags().BoolVarP(&listAll, "all", "a", false, "Include completed tasks")
 	listCmd.Flags().BoolVar(&listTree, "tree", false, "Show as tree")
+	listCmd.Flags().BoolVar(&listJSON, "json", false, "Output as JSON array")
 }

@@ -37,6 +37,12 @@ var initCmd = &cobra.Command{
 			return fmt.Errorf("failed to save config: %w", err)
 		}
 
+		// Write the usage doc so integrating tools have a stable path to
+		// symlink from day one
+		if _, err := writeAgentsDoc(); err != nil {
+			return fmt.Errorf("failed to write usage doc: %w", err)
+		}
+
 		fmt.Printf("Initialized yoke at %s\n", config.YokeDir())
 		fmt.Println("\nNext steps:")
 		fmt.Println("  yoke add \"My first task\"  # Create a task")

@@ -8,7 +8,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var logLimit int
+var (
+	logLimit int
+	logJSON  bool
+)
 
 var logCmd = &cobra.Command{
 	Use:   "log [id]",
@@ -37,6 +40,10 @@ func showRecentEvents() error {
 	events, err := store.GetRecentEvents(logLimit)
 	if err != nil {
 		return fmt.Errorf("failed to get events: %w", err)
+	}
+
+	if logJSON {
+		return printJSON(toEventsJSON(events))
 	}
 
 	if len(events) == 0 {
@@ -73,6 +80,10 @@ func showTaskEvents(idOrSeq string) error {
 	events, err := store.GetEvents(t.ID)
 	if err != nil {
 		return fmt.Errorf("failed to get events: %w", err)
+	}
+
+	if logJSON {
+		return printJSON(toEventsJSON(events))
 	}
 
 	if len(events) == 0 {
@@ -132,4 +143,5 @@ func formatEventDescription(e task.Event) string {
 
 func init() {
 	logCmd.Flags().IntVarP(&logLimit, "limit", "n", 20, "Number of events to show")
+	logCmd.Flags().BoolVar(&logJSON, "json", false, "Output as JSON array")
 }

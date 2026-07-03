@@ -35,6 +35,8 @@ Examples:
 	},
 }
 
+var notesJSON bool
+
 var notesCmd = &cobra.Command{
 	Use:   "notes <id>",
 	Short: "Show notes for a task",
@@ -42,7 +44,8 @@ var notesCmd = &cobra.Command{
 
 Examples:
   yoke notes a3f8
-  yoke notes 42`,
+  yoke notes 42
+  yoke notes 42 --json`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		t, err := store.Get(args[0])
@@ -53,6 +56,10 @@ Examples:
 		notes, err := store.GetNotes(t.ID)
 		if err != nil {
 			return fmt.Errorf("failed to get notes: %w", err)
+		}
+
+		if notesJSON {
+			return printJSON(toNotesJSON(notes))
 		}
 
 		if len(notes) == 0 {
@@ -72,5 +79,6 @@ Examples:
 }
 
 func init() {
+	notesCmd.Flags().BoolVar(&notesJSON, "json", false, "Output as JSON array")
 	rootCmd.AddCommand(notesCmd)
 }
