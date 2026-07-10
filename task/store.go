@@ -183,10 +183,9 @@ const taskColumns = `id, seq, notion_id, notion_url, external_ref,
 
 // Get retrieves a task by ID or sequence number.
 func (s *Store) Get(idOrSeq string) (*Task, error) {
-	var row *sql.Row
-
-	// Try as sequence number first (if it's purely numeric)
-	isNumeric := true
+	// Digits resolve as a sequence number first, but fall back to the id
+	// lookup on a miss — 4-char hex ids are occasionally all digits.
+	isNumeric := len(idOrSeq) > 0
 	for _, c := range idOrSeq {
 		if c < '0' || c > '9' {
 			isNumeric = false
@@ -194,15 +193,16 @@ func (s *Store) Get(idOrSeq string) (*Task, error) {
 		}
 	}
 
-	if isNumeric && len(idOrSeq) > 0 {
+	if isNumeric {
 		var seq int
 		fmt.Sscanf(idOrSeq, "%d", &seq)
-		row = s.db.QueryRow("SELECT "+taskColumns+" FROM tasks WHERE seq = ?", seq)
-	} else {
-		// Try as ID (exact match or prefix)
-		row = s.db.QueryRow("SELECT "+taskColumns+" FROM tasks WHERE id = ? OR id LIKE ?", idOrSeq, idOrSeq+"%")
+		if t, err := s.scanTask(s.db.QueryRow("SELECT "+taskColumns+" FROM tasks WHERE seq = ?", seq)); err == nil {
+			return t, nil
+		}
 	}
 
+	// ID (exact match or prefix)
+	row := s.db.QueryRow("SELECT "+taskColumns+" FROM tasks WHERE id = ? OR id LIKE ?", idOrSeq, idOrSeq+"%")
 	return s.scanTask(row)
 }
 
