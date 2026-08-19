@@ -77,7 +77,7 @@ Examples:
 
 		// Dry run - just show what would be created
 		if importDryRun {
-			fmt.Println("=== DRY RUN - No changes will be made ===\n")
+			fmt.Println("=== DRY RUN - No changes will be made ===")
 			fmt.Println("Would create task:")
 			fmt.Printf("  Title:    %s\n", title)
 			fmt.Printf("  Status:   %s (from Notion: %s)\n", yokeStatus, notionStatus)

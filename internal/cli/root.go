@@ -16,6 +16,13 @@ var (
 )
 
 // rootCmd is the base command.
+// SetVersion wires the build-stamped version into the root command so
+// `yoke --version` reports it.
+func SetVersion(v string) {
+	rootCmd.Version = v
+	rootCmd.InitDefaultVersionFlag()
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "yoke",
 	Short: "The yoke that binds your tasks to your work",

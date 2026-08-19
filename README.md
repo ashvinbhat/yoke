@@ -149,3 +149,12 @@ NOTION_TOKEN=secret_xxx
 ## Status
 
 Built with love. See [ROADMAP.md](./ROADMAP.md) for development plan.
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md). `main` is protected — changes land via
+pull requests, and CI (build + vet + test) must pass.
+
+## License
+
+[MIT](./LICENSE)

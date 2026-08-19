@@ -197,7 +197,7 @@ type pullTask struct {
 }
 
 func printPullDryRun(tasks []*pullTask) {
-	fmt.Println("=== DRY RUN - No changes will be made ===\n")
+	fmt.Println("=== DRY RUN - No changes will be made ===")
 
 	var withChanges, upToDate int
 	for _, pt := range tasks {

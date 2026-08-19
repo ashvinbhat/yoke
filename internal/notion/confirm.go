@@ -58,7 +58,7 @@ type PushTaskPlan struct {
 
 // Print displays the push plan.
 func (p *PushPlan) Print() {
-	fmt.Println("=== DRY RUN - No changes will be made to Notion ===\n")
+	fmt.Println("=== DRY RUN - No changes will be made to Notion ===")
 
 	if len(p.Tasks) == 0 {
 		fmt.Println("No tasks to push")
