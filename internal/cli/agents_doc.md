@@ -14,6 +14,22 @@ command that takes an `<id>`:
 - `seq` — human-friendly number (`42`). Stable, never reused.
 - `id` — 4-char hash (`a3f8`). Use when scripting; prefix-match supported.
 
+**Keys.** A key finds one task, and any command that takes an `<id>` takes
+a key too. A key has a `:` or `-` and no spaces; case doesn't matter.
+- `CB-18304` — a Notion ticket (`yoke sync` adds it)
+- `pr:<repo>-<n>` — a PR the task holds (`pr:backend-6952`)
+- `thread:<id>` — a thread that worked on it
+
+`yoke add --key k` finds the task `k` already names instead of creating a
+second one: the task takes the new keys and tags, `--body` becomes a note,
+and a done or dropped task is reopened (one linked to Notion keeps Notion's
+status). The first word of the output says which: `Created`, `Found` or
+`Reopened`, then `task #N [id]: title`.
+
+**Found from.** `yoke add --from <id>` records the task a new one was
+noticed in. It doesn't block anything; it answers "what came out of this
+work?" (`yoke show`, `yoke context`, `yoke list --from <id>`).
+
 **Statuses** (exact strings, used in `--status` filters and JSON output):
 | status | meaning |
 |---|---|
@@ -36,7 +52,7 @@ Read commands accept `--json`. JSON field names are a stable contract
 strings above — never display formatting.
 
 ```
-yoke show 42 --json      # task + resolved parent/children/blockers
+yoke show 42 --json      # task + resolved parent/children/blockers/foundFrom/found
 yoke list --json         # array of tasks
 yoke notes 42 --json     # array of notes
 yoke log 42 --json       # array of events
@@ -61,6 +77,8 @@ yoke context 42 --events 0 # include full history
 ### Creating & editing
 ```
 yoke add "Title" [-t tag]... [-p N] [-b "body"]   # create (note: -t repeats, NOT --tags)
+yoke add "Title" -k <key>... [--from <id>]        # find by key, else create; found from a task
+yoke key <id> <key>...                            # add keys to a task
 yoke edit <id> --title "..." | --body "..." | --priority N | --status <status>
 yoke subtask <parent-id> "Title"                  # create child task
 ```
@@ -90,6 +108,7 @@ yoke list                          # open tasks
 yoke list --all                    # include done/dropped
 yoke list --status in_progress     # filter by status
 yoke list --tag backend            # filter by tag
+yoke list --from <id>              # tasks found from a task
 yoke ready                         # unblocked tasks, ready to pick up
 yoke search "query"                # full-text search in title/body
 yoke show <id>                     # full detail for one task
@@ -104,9 +123,10 @@ yoke tags [id]            # list all tags, or one task's
 ```
 
 ### Notion sync
-Tasks may be linked to Notion pages. Sync is explicit, never automatic,
-and always validates the page's assignee before writing.
+Tasks may be linked to Notion pages. Only commands run on purpose touch
+Notion, and they validate the page's assignee first.
 ```
+yoke sync [--dry-run]        # bring in your current-sprint tickets; refresh open linked ones (read-only)
 yoke import <notion-url>     # create local task from a Notion page
 yoke link <id> <notion-url>  # link an existing local task
 yoke pull <id> [--dry-run]   # apply Notion changes locally
@@ -129,5 +149,6 @@ yoke note <id> "PR: <url>"         # 4. link artifacts you produce
 yoke done <id> --outcome "..."     # 5. close with what actually happened
 ```
 
-If you discover follow-up work, create it (`yoke add` / `yoke subtask`)
-rather than leaving it in prose — untracked work is lost work.
+If you discover follow-up work, create it (`yoke add --from <id>` /
+`yoke subtask`) rather than leaving it in prose — untracked work is lost
+work.

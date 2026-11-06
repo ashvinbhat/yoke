@@ -83,9 +83,30 @@ func (s *Store) migrate() error {
 
 	-- Initialize sequence counter if not exists
 	INSERT OR IGNORE INTO meta (key, value) VALUES ('next_seq', '1');
+
+	CREATE TABLE IF NOT EXISTS task_keys (
+		key TEXT PRIMARY KEY COLLATE NOCASE,
+		task_id TEXT NOT NULL REFERENCES tasks(id)
+	);
+	CREATE INDEX IF NOT EXISTS task_keys_task ON task_keys(task_id);
 	`
 
-	_, err := s.db.Exec(schema)
+	if _, err := s.db.Exec(schema); err != nil {
+		return err
+	}
+	return s.addColumn("tasks", "found_from", "TEXT")
+}
+
+// addColumn adds a column that databases made before it don't have.
+func (s *Store) addColumn(table, column, decl string) error {
+	var n int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?", table, column).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return nil
+	}
+	_, err := s.db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, decl))
 	return err
 }
 
@@ -126,19 +147,30 @@ func (s *Store) Create(t *Task) error {
 	tags, _ := json.Marshal(t.Tags)
 	blockers, _ := json.Marshal(t.Blockers)
 
-	_, err = s.db.Exec(`
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	_, err = tx.Exec(`
 		INSERT INTO tasks (
 			id, seq, notion_id, notion_url, external_ref,
 			title, body, status, priority, tags, parent_id, blockers,
-			synced_at, local_only, created_at, updated_at, started_at, done_at, outcome
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			synced_at, local_only, created_at, updated_at, started_at, done_at, outcome, found_from
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		t.ID, t.Seq, t.NotionID, t.NotionURL, t.ExternalRef,
 		t.Title, t.Body, t.Status, t.Priority, string(tags), t.Parent, string(blockers),
-		t.SyncedAt, t.LocalOnly, t.CreatedAt, t.UpdatedAt, t.StartedAt, t.DoneAt, t.Outcome,
+		t.SyncedAt, t.LocalOnly, t.CreatedAt, t.UpdatedAt, t.StartedAt, t.DoneAt, t.Outcome, t.FoundFrom,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to insert task: %w", err)
+	}
+	if err := insertKeys(tx, t.ID, t.Keys); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 
 	// Log creation event
@@ -153,35 +185,175 @@ func (s *Store) Update(t *Task) error {
 	tags, _ := json.Marshal(t.Tags)
 	blockers, _ := json.Marshal(t.Blockers)
 
-	_, err := s.db.Exec(`
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	_, err = tx.Exec(`
 		UPDATE tasks SET
 			notion_id = ?, notion_url = ?, external_ref = ?,
 			title = ?, body = ?, status = ?, priority = ?,
 			tags = ?, parent_id = ?, blockers = ?,
 			synced_at = ?, local_only = ?, updated_at = ?,
-			started_at = ?, done_at = ?, outcome = ?
+			started_at = ?, done_at = ?, outcome = ?, found_from = ?
 		WHERE id = ?
 	`,
 		t.NotionID, t.NotionURL, t.ExternalRef,
 		t.Title, t.Body, t.Status, t.Priority,
 		string(tags), t.Parent, string(blockers),
 		t.SyncedAt, t.LocalOnly, t.UpdatedAt,
-		t.StartedAt, t.DoneAt, t.Outcome,
+		t.StartedAt, t.DoneAt, t.Outcome, t.FoundFrom,
 		t.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update task: %w", err)
 	}
+	if err := insertKeys(tx, t.ID, t.Keys); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
 
+// insertKeys stores the keys taskID doesn't have yet. A key another task
+// holds is an error: a key finds one task.
+func insertKeys(tx *sql.Tx, taskID string, keys []string) error {
+	for _, k := range keys {
+		if !ValidKey(k) {
+			return fmt.Errorf("%q isn't a key: a key has no spaces and has a ':' or '-' (CB-123, pr:backend-42)", k)
+		}
+		if _, err := tx.Exec("INSERT OR IGNORE INTO task_keys (key, task_id) VALUES (?, ?)", k, taskID); err != nil {
+			return fmt.Errorf("failed to add key %s: %w", k, err)
+		}
+		var owner string
+		if err := tx.QueryRow("SELECT task_id FROM task_keys WHERE key = ?", k).Scan(&owner); err != nil {
+			return fmt.Errorf("failed to read key %s: %w", k, err)
+		}
+		if owner != taskID {
+			return fmt.Errorf("key %s already finds task %s", k, owner)
+		}
+	}
 	return nil
+}
+
+// loadKeys fills in each task's keys, in the order they were added.
+func (s *Store) loadKeys(tasks []*Task) error {
+	byID := make(map[string]*Task, len(tasks))
+	for _, t := range tasks {
+		t.Keys = []string{}
+		byID[t.ID] = t
+	}
+	if len(tasks) == 0 {
+		return nil
+	}
+	query := "SELECT task_id, key FROM task_keys ORDER BY rowid"
+	var args []any
+	if len(tasks) == 1 {
+		query = "SELECT task_id, key FROM task_keys WHERE task_id = ? ORDER BY rowid"
+		args = append(args, tasks[0].ID)
+	}
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return fmt.Errorf("failed to load keys: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, key string
+		if err := rows.Scan(&id, &key); err != nil {
+			return fmt.Errorf("failed to load keys: %w", err)
+		}
+		if t, ok := byID[id]; ok {
+			t.Keys = append(t.Keys, key)
+		}
+	}
+	return rows.Err()
+}
+
+// FindByKeys returns the task any of keys finds, or nil when none does.
+// Keys that find two different tasks are an error, so the caller says which.
+func (s *Store) FindByKeys(keys []string) (*Task, error) {
+	found := ""
+	for _, k := range keys {
+		var id string
+		err := s.db.QueryRow("SELECT task_id FROM task_keys WHERE key = ?", k).Scan(&id)
+		if err == sql.ErrNoRows {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to find key %s: %w", k, err)
+		}
+		if found != "" && found != id {
+			return nil, fmt.Errorf("keys %s find two tasks, %s and %s", strings.Join(keys, ", "), found, id)
+		}
+		found = id
+	}
+	if found == "" {
+		return nil, nil
+	}
+	return s.GetByID(found)
+}
+
+// Added says what Add did.
+type Added string
+
+const (
+	AddedNew      Added = "created"
+	AddedFound    Added = "found"
+	AddedReopened Added = "reopened"
+)
+
+// Add creates t, unless one of its keys finds a task already. That task
+// then takes t's other keys and tags, is reopened if it was done or
+// dropped, and gets t's body as a note; its title, parent and found-from
+// stay. A task's history stays in one place however often it's added. A
+// task linked to Notion isn't reopened: its status is Notion's.
+func (s *Store) Add(t *Task) (*Task, Added, error) {
+	existing, err := s.FindByKeys(t.Keys)
+	if err != nil {
+		return nil, "", err
+	}
+	if existing == nil {
+		if err := s.Create(t); err != nil {
+			return nil, "", err
+		}
+		return t, AddedNew, nil
+	}
+
+	added := AddedFound
+	was := existing.Status
+	var earlier *string
+	if existing.IsComplete() && !existing.Linked() {
+		added = AddedReopened
+		earlier = existing.Outcome
+		existing.Reopen()
+	}
+	for _, k := range t.Keys {
+		existing.AddKey(k)
+	}
+	for _, tag := range t.Tags {
+		existing.AddTag(tag)
+	}
+	if err := s.Update(existing); err != nil {
+		return nil, "", err
+	}
+	if added == AddedReopened {
+		s.LogEvent(existing.ID, "reopened", string(was), string(existing.Status))
+		if earlier != nil {
+			s.AddNote(existing.ID, "Outcome before it was reopened: "+*earlier)
+		}
+	}
+	if body := strings.TrimSpace(t.Body); body != "" {
+		s.AddNote(existing.ID, body)
+	}
+	return existing, added, nil
 }
 
 // taskColumns is the list of columns for task queries.
 const taskColumns = `id, seq, notion_id, notion_url, external_ref,
 	title, body, status, priority, tags, parent_id, blockers,
-	synced_at, local_only, created_at, updated_at, started_at, done_at, outcome`
+	synced_at, local_only, created_at, updated_at, started_at, done_at, outcome, found_from`
 
-// Get retrieves a task by ID or sequence number.
+// Get retrieves a task by ID, sequence number or key.
 func (s *Store) Get(idOrSeq string) (*Task, error) {
 	// Digits resolve as a sequence number first, but fall back to the id
 	// lookup on a miss — 4-char hex ids are occasionally all digits.
@@ -191,6 +363,17 @@ func (s *Store) Get(idOrSeq string) (*Task, error) {
 			isNumeric = false
 			break
 		}
+	}
+
+	if ValidKey(idOrSeq) {
+		t, err := s.FindByKeys([]string{idOrSeq})
+		if err != nil {
+			return nil, err
+		}
+		if t == nil {
+			return nil, fmt.Errorf("task not found")
+		}
+		return t, nil
 	}
 
 	if isNumeric {
@@ -214,23 +397,60 @@ func (s *Store) GetByID(id string) (*Task, error) {
 
 // scanTask scans a row into a Task struct.
 func (s *Store) scanTask(row *sql.Row) (*Task, error) {
-	var t Task
-	var tags, blockers string
-	var notionID, notionURL, extRef, parent, outcome sql.NullString
-	var syncedAt, startedAt, doneAt sql.NullTime
-
-	err := row.Scan(
-		&t.ID, &t.Seq, &notionID, &notionURL, &extRef,
-		&t.Title, &t.Body, &t.Status, &t.Priority, &tags, &parent, &blockers,
-		&syncedAt, &t.LocalOnly, &t.CreatedAt, &t.UpdatedAt, &startedAt, &doneAt, &outcome,
-	)
+	t, err := scanOne(row)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("task not found")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan task: %w", err)
 	}
+	if err := s.loadKeys([]*Task{t}); err != nil {
+		return nil, err
+	}
+	return t, nil
+}
 
+// scanTasks scans every row, then loads the tasks' keys.
+func (s *Store) scanTasks(rows *sql.Rows) ([]*Task, error) {
+	var tasks []*Task
+	for rows.Next() {
+		t, err := scanOne(rows)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan task: %w", err)
+		}
+		tasks = append(tasks, t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read tasks: %w", err)
+	}
+	if err := s.loadKeys(tasks); err != nil {
+		return nil, err
+	}
+	return tasks, nil
+}
+
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanOne(row rowScanner) (*Task, error) {
+	var t Task
+	var tags, blockers string
+	var notionID, notionURL, extRef, parent, outcome, foundFrom sql.NullString
+	var syncedAt, startedAt, doneAt sql.NullTime
+
+	err := row.Scan(
+		&t.ID, &t.Seq, &notionID, &notionURL, &extRef,
+		&t.Title, &t.Body, &t.Status, &t.Priority, &tags, &parent, &blockers,
+		&syncedAt, &t.LocalOnly, &t.CreatedAt, &t.UpdatedAt, &startedAt, &doneAt, &outcome, &foundFrom,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if foundFrom.Valid {
+		t.FoundFrom = &foundFrom.String
+	}
 	// Handle nullable fields
 	if notionID.Valid {
 		t.NotionID = &notionID.String
@@ -273,13 +493,14 @@ func (s *Store) scanTask(row *sql.Row) (*Task, error) {
 
 // ListOptions specifies filters for listing tasks.
 type ListOptions struct {
-	Status   *Status
-	Priority *int
-	Tag      *string
-	ParentID *string
-	Open     bool // Only open (non-complete) tasks
-	Blocked  bool // Only blocked tasks
-	Ready    bool // Only unblocked, active tasks
+	Status    *Status
+	Priority  *int
+	Tag       *string
+	ParentID  *string
+	FoundFrom *string
+	Open      bool // Only open (non-complete) tasks
+	Blocked   bool // Only blocked tasks
+	Ready     bool // Only unblocked, active tasks
 }
 
 // List retrieves tasks matching the given options.
@@ -307,6 +528,11 @@ func (s *Store) List(opts ListOptions) ([]*Task, error) {
 		args = append(args, *opts.ParentID)
 	}
 
+	if opts.FoundFrom != nil {
+		query += " AND found_from = ?"
+		args = append(args, *opts.FoundFrom)
+	}
+
 	if opts.Open {
 		query += " AND status NOT IN ('done', 'dropped')"
 	}
@@ -327,62 +553,7 @@ func (s *Store) List(opts ListOptions) ([]*Task, error) {
 	}
 	defer rows.Close()
 
-	var tasks []*Task
-	for rows.Next() {
-		var t Task
-		var tags, blockers string
-		var notionID, notionURL, extRef, parent, outcome sql.NullString
-		var syncedAt, startedAt, doneAt sql.NullTime
-
-		err := rows.Scan(
-			&t.ID, &t.Seq, &notionID, &notionURL, &extRef,
-			&t.Title, &t.Body, &t.Status, &t.Priority, &tags, &parent, &blockers,
-			&syncedAt, &t.LocalOnly, &t.CreatedAt, &t.UpdatedAt, &startedAt, &doneAt, &outcome,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan task: %w", err)
-		}
-
-		// Handle nullable fields
-		if notionID.Valid {
-			t.NotionID = &notionID.String
-		}
-		if notionURL.Valid {
-			t.NotionURL = &notionURL.String
-		}
-		if extRef.Valid {
-			t.ExternalRef = &extRef.String
-		}
-		if parent.Valid {
-			t.Parent = &parent.String
-		}
-		if outcome.Valid {
-			t.Outcome = &outcome.String
-		}
-		if syncedAt.Valid {
-			t.SyncedAt = &syncedAt.Time
-		}
-		if startedAt.Valid {
-			t.StartedAt = &startedAt.Time
-		}
-		if doneAt.Valid {
-			t.DoneAt = &doneAt.Time
-		}
-
-		json.Unmarshal([]byte(tags), &t.Tags)
-		json.Unmarshal([]byte(blockers), &t.Blockers)
-
-		if t.Tags == nil {
-			t.Tags = []string{}
-		}
-		if t.Blockers == nil {
-			t.Blockers = []string{}
-		}
-
-		tasks = append(tasks, &t)
-	}
-
-	return tasks, nil
+	return s.scanTasks(rows)
 }
 
 // Delete removes a task from the store.
@@ -395,6 +566,9 @@ func (s *Store) Delete(id string) error {
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
 		return fmt.Errorf("task not found")
+	}
+	if _, err := s.db.Exec("DELETE FROM task_keys WHERE task_id = ?", id); err != nil {
+		return fmt.Errorf("failed to delete the task's keys: %w", err)
 	}
 
 	s.LogEvent(id, "deleted", "", "")
@@ -438,62 +612,7 @@ func (s *Store) Search(query string) ([]*Task, error) {
 	}
 	defer rows.Close()
 
-	var tasks []*Task
-	for rows.Next() {
-		var t Task
-		var tags, blockers string
-		var notionID, notionURL, extRef, parent, outcome sql.NullString
-		var syncedAt, startedAt, doneAt sql.NullTime
-
-		err := rows.Scan(
-			&t.ID, &t.Seq, &notionID, &notionURL, &extRef,
-			&t.Title, &t.Body, &t.Status, &t.Priority, &tags, &parent, &blockers,
-			&syncedAt, &t.LocalOnly, &t.CreatedAt, &t.UpdatedAt, &startedAt, &doneAt, &outcome,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan task: %w", err)
-		}
-
-		// Handle nullable fields
-		if notionID.Valid {
-			t.NotionID = &notionID.String
-		}
-		if notionURL.Valid {
-			t.NotionURL = &notionURL.String
-		}
-		if extRef.Valid {
-			t.ExternalRef = &extRef.String
-		}
-		if parent.Valid {
-			t.Parent = &parent.String
-		}
-		if outcome.Valid {
-			t.Outcome = &outcome.String
-		}
-		if syncedAt.Valid {
-			t.SyncedAt = &syncedAt.Time
-		}
-		if startedAt.Valid {
-			t.StartedAt = &startedAt.Time
-		}
-		if doneAt.Valid {
-			t.DoneAt = &doneAt.Time
-		}
-
-		json.Unmarshal([]byte(tags), &t.Tags)
-		json.Unmarshal([]byte(blockers), &t.Blockers)
-
-		if t.Tags == nil {
-			t.Tags = []string{}
-		}
-		if t.Blockers == nil {
-			t.Blockers = []string{}
-		}
-
-		tasks = append(tasks, &t)
-	}
-
-	return tasks, nil
+	return s.scanTasks(rows)
 }
 
 // Note represents a note attached to a task.
@@ -629,62 +748,7 @@ func (s *Store) ListLinked() ([]*Task, error) {
 	}
 	defer rows.Close()
 
-	var tasks []*Task
-	for rows.Next() {
-		var t Task
-		var tags, blockers string
-		var notionID, notionURL, extRef, parent, outcome sql.NullString
-		var syncedAt, startedAt, doneAt sql.NullTime
-
-		err := rows.Scan(
-			&t.ID, &t.Seq, &notionID, &notionURL, &extRef,
-			&t.Title, &t.Body, &t.Status, &t.Priority, &tags, &parent, &blockers,
-			&syncedAt, &t.LocalOnly, &t.CreatedAt, &t.UpdatedAt, &startedAt, &doneAt, &outcome,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan task: %w", err)
-		}
-
-		// Handle nullable fields
-		if notionID.Valid {
-			t.NotionID = &notionID.String
-		}
-		if notionURL.Valid {
-			t.NotionURL = &notionURL.String
-		}
-		if extRef.Valid {
-			t.ExternalRef = &extRef.String
-		}
-		if parent.Valid {
-			t.Parent = &parent.String
-		}
-		if outcome.Valid {
-			t.Outcome = &outcome.String
-		}
-		if syncedAt.Valid {
-			t.SyncedAt = &syncedAt.Time
-		}
-		if startedAt.Valid {
-			t.StartedAt = &startedAt.Time
-		}
-		if doneAt.Valid {
-			t.DoneAt = &doneAt.Time
-		}
-
-		json.Unmarshal([]byte(tags), &t.Tags)
-		json.Unmarshal([]byte(blockers), &t.Blockers)
-
-		if t.Tags == nil {
-			t.Tags = []string{}
-		}
-		if t.Blockers == nil {
-			t.Blockers = []string{}
-		}
-
-		tasks = append(tasks, &t)
-	}
-
-	return tasks, nil
+	return s.scanTasks(rows)
 }
 
 // UpdateSyncedAt updates the sync timestamp for a task.

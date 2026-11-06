@@ -14,6 +14,11 @@ const (
 	NotionStatusVerify     NotionStatus = "Verify"
 	NotionStatusDone       NotionStatus = "Done"
 	NotionStatusBlocked    NotionStatus = "Blocked"
+
+	NotionStatusMergedOnQA   NotionStatus = "Merged on QA - Pending Verification"
+	NotionStatusVerifiedOnQA NotionStatus = "Verified on QA"
+	NotionStatusRCAPending   NotionStatus = "RCA Pending"
+	NotionStatusCancelled    NotionStatus = "Cancelled"
 )
 
 // ToYokeStatus converts a Notion status to a yoke status.
@@ -21,12 +26,15 @@ func (n NotionStatus) ToYokeStatus() task.Status {
 	switch n {
 	case NotionStatusTodo:
 		return task.StatusPending
-	case NotionStatusInProgress, NotionStatusInReview, NotionStatusOnQA, NotionStatusVerify:
+	case NotionStatusInProgress, NotionStatusInReview, NotionStatusOnQA, NotionStatusVerify,
+		NotionStatusMergedOnQA, NotionStatusVerifiedOnQA, NotionStatusRCAPending:
 		return task.StatusInProgress
 	case NotionStatusDone:
 		return task.StatusDone
 	case NotionStatusBlocked:
 		return task.StatusBlocked
+	case NotionStatusCancelled:
+		return task.StatusDropped
 	default:
 		return task.StatusPending
 	}
@@ -51,11 +59,13 @@ func YokeToNotionStatus(s task.Status) NotionStatus {
 // NotionPriorityToYoke converts Notion priority to yoke priority (1-5).
 func NotionPriorityToYoke(priority string) int {
 	switch priority {
-	case "High":
+	case "High", "P0":
 		return 1
-	case "Medium":
+	case "P1":
+		return 2
+	case "Medium", "P2":
 		return 3
-	case "Low":
+	case "Low", "P3":
 		return 4
 	default:
 		return 3 // Default medium priority

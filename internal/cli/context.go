@@ -16,8 +16,8 @@ var contextCmd = &cobra.Command{
 	Use:   "context <id>",
 	Short: "Assemble the full context for a task",
 	Long: `Assembles everything known about a task into a single document:
-title, status, description, hierarchy (parent/children), blockers, notes,
-and recent activity.
+title, status, keys, description, hierarchy (parent/children), blockers,
+what it was found from and what was found here, notes, and recent activity.
 
 This is the canonical way for tools and agents to load a task's context.
 Markdown output is designed to be embedded directly into an agent's
@@ -87,6 +87,9 @@ func renderContextMarkdown(ctx taskContextJSON) string {
 	if ctx.ExternalRef != nil {
 		fmt.Fprintf(&sb, "**External ref:** %s\n", *ctx.ExternalRef)
 	}
+	if len(ctx.Keys) > 0 {
+		fmt.Fprintf(&sb, "**Keys:** %s\n", strings.Join(ctx.Keys, ", "))
+	}
 	sb.WriteString("\n")
 
 	if ctx.Body != "" {
@@ -117,6 +120,20 @@ func renderContextMarkdown(ctx taskContextJSON) string {
 		sb.WriteString("## Blocked by\n\n")
 		for _, b := range ctx.BlockedBy {
 			fmt.Fprintf(&sb, "- #%d %s (%s)\n", b.Seq, b.Title, b.Status)
+		}
+		sb.WriteString("\n")
+	}
+
+	if ctx.FoundFrom != nil || len(ctx.Found) > 0 {
+		sb.WriteString("## Found\n\n")
+		if ctx.FoundFrom != nil {
+			fmt.Fprintf(&sb, "Found from: #%d %s (%s)\n", ctx.FoundFrom.Seq, ctx.FoundFrom.Title, ctx.FoundFrom.Status)
+		}
+		if len(ctx.Found) > 0 {
+			sb.WriteString("Found here:\n")
+			for _, f := range ctx.Found {
+				fmt.Fprintf(&sb, "- #%d %s (%s)\n", f.Seq, f.Title, f.Status)
+			}
 		}
 		sb.WriteString("\n")
 	}
