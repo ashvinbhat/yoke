@@ -67,6 +67,8 @@ yoke done <id>
 ```bash
 yoke init                      # Initialize yoke in ~/.yoke
 yoke add "title"               # Create task
+yoke add "title" -k CB-123     # Find the task a key names, else create it
+yoke key <id> <key>            # Add a key (CB-123, pr:<repo>-<n>, thread:<id>)
 yoke list                      # List tasks
 yoke show <id>                 # Task details
 yoke start <id>                # Mark as in_progress
@@ -112,6 +114,7 @@ yoke list --blocked            # Show blocked tasks
 ```bash
 yoke link <id> <notion-url>    # Link local task to Notion page
 yoke import <notion-url>       # Import task from Notion
+yoke sync [--dry-run]          # Bring in current-sprint tickets assigned to you
 yoke pull [id]                 # Pull updates from Notion
 yoke pull --dry-run            # Preview what would change
 # push/sync coming soon

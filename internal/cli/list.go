@@ -18,6 +18,7 @@ var (
 	listAll      bool
 	listTree     bool
 	listJSON     bool
+	listFrom     string
 )
 
 var listCmd = &cobra.Command{
@@ -31,6 +32,7 @@ Examples:
   yoke list --status active  # Only active tasks
   yoke list --tag backend    # Tasks with tag
   yoke list --ready          # Unblocked, ready to work
+  yoke list --from 42        # Tasks found from #42
   yoke list --tree           # Show as tree`,
 	Aliases: []string{"ls"},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -53,6 +55,14 @@ Examples:
 
 		if listTag != "" {
 			opts.Tag = &listTag
+		}
+
+		if listFrom != "" {
+			from, err := store.Get(listFrom)
+			if err != nil {
+				return fmt.Errorf("task not found: %s", listFrom)
+			}
+			opts.FoundFrom = &from.ID
 		}
 
 		if listBlocked {
@@ -133,4 +143,5 @@ func init() {
 	listCmd.Flags().BoolVarP(&listAll, "all", "a", false, "Include completed tasks")
 	listCmd.Flags().BoolVar(&listTree, "tree", false, "Show as tree")
 	listCmd.Flags().BoolVar(&listJSON, "json", false, "Output as JSON array")
+	listCmd.Flags().StringVar(&listFrom, "from", "", "Only tasks found from this task")
 }

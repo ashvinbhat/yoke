@@ -4,6 +4,7 @@ package task
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"strings"
 	"time"
 )
 
@@ -65,6 +66,10 @@ type Task struct {
 	Parent   *string  // Parent task ID for hierarchy
 	Blockers []string // Task IDs that block this
 
+	// Lookup
+	Keys      []string // What finds this task: CB-123, pr:backend-42, thread:local_ab12
+	FoundFrom *string  // The task this one was noticed in; it doesn't block
+
 	// Sync metadata
 	SyncedAt  *time.Time // Last Notion sync
 	LocalOnly bool       // Not in Notion
@@ -87,6 +92,7 @@ func New(title string) *Task {
 		Priority:  3, // Default middle priority
 		Tags:      []string{},
 		Blockers:  []string{},
+		Keys:      []string{},
 		LocalOnly: true,
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -148,6 +154,31 @@ func (t *Task) AddTag(tag string) {
 	t.UpdatedAt = time.Now()
 }
 
+// ValidKey reports whether k can be a key. The ':' or '-' keeps a key from
+// reading as a task id or a sequence number.
+func ValidKey(k string) bool {
+	return k != "" && !strings.ContainsAny(k, " \t\n") && strings.ContainsAny(k, ":-")
+}
+
+// AddKey adds a key if not already present, ignoring case.
+func (t *Task) AddKey(key string) {
+	for _, existing := range t.Keys {
+		if strings.EqualFold(existing, key) {
+			return
+		}
+	}
+	t.Keys = append(t.Keys, key)
+	t.UpdatedAt = time.Now()
+}
+
+// Reopen puts a done or dropped task back to pending.
+func (t *Task) Reopen() {
+	t.Status = StatusPending
+	t.DoneAt = nil
+	t.Outcome = nil
+	t.UpdatedAt = time.Now()
+}
+
 // RemoveTag removes a tag if present.
 func (t *Task) RemoveTag(tag string) {
 	for i, existing := range t.Tags {
@@ -189,6 +220,11 @@ func (t *Task) IsBlocked() bool {
 // IsComplete returns true if the task is done or dropped.
 func (t *Task) IsComplete() bool {
 	return t.Status == StatusDone || t.Status == StatusDropped
+}
+
+// Linked reports a task linked to a Notion page.
+func (t *Task) Linked() bool {
+	return t.NotionID != nil && *t.NotionID != ""
 }
 
 // IsOpen returns true if the task is not complete.

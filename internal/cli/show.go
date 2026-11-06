@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ashvinbhat/yoke/task"
 	"github.com/spf13/cobra"
 )
 
@@ -14,7 +15,8 @@ var showCmd = &cobra.Command{
 	Short: "Show task details",
 	Long: `Shows detailed information about a task.
 
-The id can be the task ID (e.g., a3f8) or sequence number (e.g., 42).
+The id can be the task ID (e.g., a3f8), sequence number (e.g., 42) or a
+key (e.g., CB-18304).
 
 Examples:
   yoke show a3f8
@@ -44,6 +46,9 @@ Examples:
 		if len(t.Tags) > 0 {
 			fmt.Printf("Tags:     %s\n", strings.Join(t.Tags, ", "))
 		}
+		if len(t.Keys) > 0 {
+			fmt.Printf("Keys:     %s\n", strings.Join(t.Keys, ", "))
+		}
 
 		// Body
 		if t.Body != "" {
@@ -66,6 +71,18 @@ Examples:
 				if blocker != nil {
 					fmt.Printf("  - #%d [%s] %s\n", blocker.Seq, blocker.ID, blocker.Title)
 				}
+			}
+		}
+
+		if t.FoundFrom != nil {
+			if from, _ := store.GetByID(*t.FoundFrom); from != nil {
+				fmt.Printf("\nFound from: #%d [%s] %s\n", from.Seq, from.ID, from.Title)
+			}
+		}
+		if found, _ := store.List(task.ListOptions{FoundFrom: &t.ID}); len(found) > 0 {
+			fmt.Println("\nFound here:")
+			for _, f := range found {
+				fmt.Printf("  - #%d [%s] %s (%s)\n", f.Seq, f.ID, f.Title, formatStatus(f.Status))
 			}
 		}
 

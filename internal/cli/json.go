@@ -24,6 +24,8 @@ type taskJSON struct {
 	Priority    int        `json:"priority"`
 	Tags        []string   `json:"tags"`
 	ParentID    *string    `json:"parentId,omitempty"`
+	FoundFromID *string    `json:"foundFromId,omitempty"`
+	Keys        []string   `json:"keys"`
 	BlockerIDs  []string   `json:"blockerIds,omitempty"`
 	NotionURL   *string    `json:"notionUrl,omitempty"`
 	ExternalRef *string    `json:"externalRef,omitempty"`
@@ -59,11 +61,14 @@ type eventJSON struct {
 }
 
 // taskDetailJSON is `yoke show --json`: the task plus resolved relations.
+// Found lists the tasks found from this one.
 type taskDetailJSON struct {
 	taskJSON
 	Parent    *taskRefJSON  `json:"parent,omitempty"`
 	Children  []taskRefJSON `json:"children"`
 	BlockedBy []taskRefJSON `json:"blockedBy"`
+	FoundFrom *taskRefJSON  `json:"foundFrom,omitempty"`
+	Found     []taskRefJSON `json:"found"`
 }
 
 // taskContextJSON is `yoke context --format json`: everything an agent or
@@ -79,6 +84,10 @@ func toTaskJSON(t *task.Task) taskJSON {
 	if tags == nil {
 		tags = []string{}
 	}
+	keys := t.Keys
+	if keys == nil {
+		keys = []string{}
+	}
 	return taskJSON{
 		ID:          t.ID,
 		Seq:         t.Seq,
@@ -88,6 +97,8 @@ func toTaskJSON(t *task.Task) taskJSON {
 		Priority:    t.Priority,
 		Tags:        tags,
 		ParentID:    t.Parent,
+		FoundFromID: t.FoundFrom,
+		Keys:        keys,
 		BlockerIDs:  t.Blockers,
 		NotionURL:   t.NotionURL,
 		ExternalRef: t.ExternalRef,
@@ -142,6 +153,7 @@ func buildTaskDetail(t *task.Task) taskDetailJSON {
 		taskJSON:  toTaskJSON(t),
 		Children:  []taskRefJSON{},
 		BlockedBy: []taskRefJSON{},
+		Found:     []taskRefJSON{},
 	}
 
 	if t.Parent != nil {
@@ -160,6 +172,19 @@ func buildTaskDetail(t *task.Task) taskDetailJSON {
 	for _, bid := range t.Blockers {
 		if blocker, err := store.GetByID(bid); err == nil && blocker != nil {
 			detail.BlockedBy = append(detail.BlockedBy, toTaskRefJSON(blocker))
+		}
+	}
+
+	if t.FoundFrom != nil {
+		if from, err := store.GetByID(*t.FoundFrom); err == nil && from != nil {
+			ref := toTaskRefJSON(from)
+			detail.FoundFrom = &ref
+		}
+	}
+
+	if found, err := store.List(task.ListOptions{FoundFrom: &t.ID}); err == nil {
+		for _, f := range found {
+			detail.Found = append(detail.Found, toTaskRefJSON(f))
 		}
 	}
 
